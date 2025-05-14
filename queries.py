@@ -198,7 +198,6 @@ from django.db.models import Q
 
 from django.db.models import F
 
-
 # Book.objects.filter(id__in=[1, 2, 3]).update(rating=F('rating') - 1)
 
 # Book.objects.filter(id__in=[1,]).update(title=F('title') + "( SSS)")
@@ -296,3 +295,284 @@ from django.db.models import F
 # )
 
 
+# ===========================================================================================================
+# ===========================================================================================================
+
+# ORM QUERIES PART II
+
+# ===========================================================================================================
+# ===========================================================================================================
+
+
+# from books.models import Book
+# from django.db.models import Count, Avg
+#
+# result = Book.objects.aggregate(
+#     total_books=Count('id'),
+#     avg_price=Avg('price')
+# )
+#
+# print(result)
+
+# print(f"Общее кол-во книг = {result['total_books']}")
+# print(f"Средняя цена книг = {round(result['avg_price'], 2)}")
+
+
+# ======================================================================
+
+
+# from books.models import Book
+# from django.db.models import Count
+#
+# # author_books = Book.objects.values('author') # -> QuerySet[{'author': ...}, {}]
+# author_books = Book.objects.values('author').annotate(
+#     books_count=Count('id')
+# )  # -> SELECT author, count(id) as books_count FROM books GROUP BY author;
+#
+# print("="*100)
+# print(author_books.query)
+# print("="*100)
+# print(author_books)
+
+
+# =================================================================================
+
+# ORDER BY
+
+# from books.models import Book
+
+
+# sorted_books = Book.objects.order_by('-title')
+#
+# # print(sorted_books)
+# print(sorted_books.query)
+#
+# for book in sorted_books:
+#     print(book.id, book.title)
+
+
+# ORDER BY По нескольким полям
+
+# from books.models import Book
+#
+# sorted_books = Book.objects.order_by(
+#     'author__name',
+#     'title'
+# )
+#
+# print(sorted_books.query)
+#
+# for book in sorted_books:
+#     print(book.author, book.title)
+
+
+# from books.models import Book
+#
+#
+# books = Book.objects.all()[7:8]
+#
+# print(books.query)
+#
+# for b in books:
+#     print(b.id, b.title)
+
+
+# -----------------------------------------------------------------------
+
+
+# SUBQUERIES
+
+# from django.db.models import Avg
+#
+# from books.models import Book
+#
+# avg_price_subq = Book.objects.aggregate(
+#     avg_price=Avg('price')  # -> {"avg_price": 22.102371}
+# )['avg_price']
+#
+# filtered_books = Book.objects.filter(
+#     price__lte=avg_price_subq
+# )
+#
+#
+# print(filtered_books.query)
+#
+# for book in filtered_books:
+#     print(book.id, book.title, round(book.price, 2), round(avg_price_subq, 2))
+
+
+# ------------------------------------------------------------------
+
+# from django.db.models import Subquery, OuterRef, Min
+#
+# from books.models import Book
+#
+#
+# subquery = (
+#     Book.objects.filter(author=OuterRef('author')) # SELECT * ...
+#     .values('author')  # SELECT book.author_id ...
+#     .annotate(min_price=Min('price'))  # SELECT book.author_id, min(price) as min_price ...
+#     .values('min_price') # SELECT min(price) as min_price FROM book AS U0 WHERE UO.author_id = book.author_id GROUP BY U0.author_id
+# )
+#
+# main_query = Book.objects.annotate(min_price_by_author=Subquery(subquery))
+# # SELECT *, SUBQUERY(...) as min_price_by_author
+#
+# print(main_query.query)
+
+
+# from django.db.models import OuterRef, Subquery, Avg
+#
+# from books.models import Book
+#
+#
+# # Подзапрос для вычисления средней цены книги того же издательства
+# subquery = (
+#     Book.objects.filter(publisher=OuterRef('publisher'))
+#     .values('publisher')
+#     .annotate(avg_price=Avg('price'))
+#     .values('avg_price')[:1]
+# )
+#
+#
+# # Фильтрация книг с ценой ниже средней цены для их издательства
+# books_below_average = Book.objects.filter(price__lt=Subquery(subquery))
+# print(books_below_average.query)
+#
+# for book in books_below_average:
+#     print(book.title, book.price)
+
+
+# -------------------------------------------------------------------------------
+
+
+# EXPRESSION WRAPPER
+
+# from django.db.models import ExpressionWrapper, F, fields
+#
+# from books.models import Book
+#
+#
+# data = Book.objects.annotate(
+#     comission_price=ExpressionWrapper(
+#         expression=F('price') * 1.18,
+#         output_field=fields.FloatField()
+#     )
+# )
+#
+# print(data)
+
+
+# ---------------------------------------------------------------------------
+
+# DJANGO DRF
+
+# my_dict = {...} -> SERIALIZER(my_dict) -> "{...}" # Сериализация
+#
+# "{...}" -> SERIALIZER("{...}") -> {...} # Десериализация
+
+
+# from books.serializers import BookSerializer
+#
+# from django.utils import timezone
+#
+# data = {
+#     "title": "TEST TITLE",
+#     "rating": 10.02,
+#     "pages": 255,
+#     "release_year": timezone.now().date(),
+# }
+#
+#
+# book_serializer = BookSerializer(data=data)
+#
+# book_serializer.is_valid()
+#
+# print(book_serializer.errors)
+# print(book_serializer.validated_data)
+
+# print(book_serializer)
+
+
+# =======================================================
+
+
+# from books.models import Book
+#
+#
+# all_books = Book.objects.all()
+# print(all_books.query)
+#
+# upd_queryset = all_books.filter(
+#     genre=1
+# )
+# print(upd_queryset.query)
+#
+#
+# print(upd_queryset[0].genre)
+
+
+# from books.debug_tools import QueryDebug
+# from books.models import Book
+#
+#
+# all_books = Book.objects.select_related(
+#     'publisher', 'author', 'genre'
+# ).all()
+#
+# print(all_books.query)
+#
+#
+# with QueryDebug(file_name='queries.log') as qd:
+#     for b in all_books:
+#         print(b.id, b.publisher.email, b.author.surname, b.genre.name)
+
+
+# from books.debug_tools import QueryDebug
+# from books.models import Book, Author
+# from django.db.models import Prefetch
+#
+#
+# authors = Author.objects.all()
+#
+# print(authors.query)
+#
+# with QueryDebug(file_name='queries.log') as qd:
+#     for a in authors:
+#         print(a.surname)
+#         for b in a.books.all():
+#             print(b.title, b.publisher.email, b.genre.name)
+
+
+# authors = Author.objects.prefetch_related(
+#     Prefetch(
+#         'books',
+#         queryset=Book.objects.select_related(
+#             'genre', 'publisher'
+#         )
+#     )
+# )
+#
+# print(authors.query)
+#
+# with QueryDebug(file_name='queries.log') as qd:
+#     for a in authors:
+#         print(a.surname)
+#         for b in a.books.all():
+#             print(b.title, b.publisher.email, b.genre.name)
+
+
+
+from books.models import Book, Genre, User, Author
+from django.db.models import QuerySet
+from books.debug_tools import QueryDebug
+
+
+all_books: QuerySet = Book.objects.select_related(
+    'genre', 'publisher', 'author'
+)
+
+
+with QueryDebug(file_name='db_logs_sum_7.log') as qd:
+    for b in all_books:
+        print(b.title, b.rating, b.genre, b.publisher, b.author)
